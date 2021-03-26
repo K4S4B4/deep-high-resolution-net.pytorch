@@ -31,6 +31,8 @@ from utils.utils import create_logger
 import dataset
 import models
 
+import cv2
+import numpy as np
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train keypoints network')
@@ -95,35 +97,31 @@ def main():
         logger.info('=> loading model from {}'.format(model_state_file))
         model.load_state_dict(torch.load(model_state_file))
 
-    #model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+#    model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
+    image = cv2.imread('resource/testdata/IMG_20210208_135527.jpg')
+    #resized = cv2.resize(image, (192,256))
+    resized = cv2.resize(image, (256,256))
+    #img_in = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+    #img_in = img_in.astype(np.float32)
+    #img_in /= 255.0
+    #mean=[0.485, 0.456, 0.406]
+    #std=[0.229, 0.224, 0.225]
+    #img_in /= mean
+    #img_in -= std
+    #img_in = np.transpose(img_in, (2, 0, 1))
 
-    # define loss function (criterion) and optimizer
-    criterion = JointsMSELoss(
-        use_target_weight=cfg.LOSS.USE_TARGET_WEIGHT
-    ).cuda()
+    tensorImage = torch.tensor(resized).byte()
+    #tensorImage = torch.tensor(img_in, dtype=torch.float)
+    tensorImage = tensorImage.unsqueeze(0)
 
-    # Data loading code
-    normalize = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-    )
-    valid_dataset = eval('dataset.'+cfg.DATASET.DATASET)(
-        cfg, cfg.DATASET.ROOT, cfg.DATASET.TEST_SET, False,
-        transforms.Compose([
-            transforms.ToTensor(),
-            normalize,
-        ])
-    )
-    valid_loader = torch.utils.data.DataLoader(
-        valid_dataset,
-        batch_size=cfg.TEST.BATCH_SIZE_PER_GPU*len(cfg.GPUS),
-        shuffle=False,
-        num_workers=cfg.WORKERS,
-        pin_memory=True
-    )
+    outputs = model(tensorImage)
 
-    # evaluate on validation set
-    validate(cfg, valid_loader, valid_dataset, model, criterion,
-             final_output_dir, tb_log_dir)
+    #for i in range(17):
+    #    sample = outputs[0][i].to('cpu').detach().numpy().copy()
+    #    cv2.imshow('output', sample)
+    #    cv2.waitKey(0)
+    print(outputs[0])
+    print(outputs[1])
 
 
 if __name__ == '__main__':

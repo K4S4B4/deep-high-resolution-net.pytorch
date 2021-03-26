@@ -14,6 +14,7 @@ import logging
 import torch
 import torch.nn as nn
 
+import cv2
 
 BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
@@ -423,6 +424,17 @@ class PoseHighResolutionNet(nn.Module):
         return nn.Sequential(*modules), num_inchannels
 
     def forward(self, x):
+        #########################################
+        x = x[:,:,:,[2, 1, 0]] # BRG to RGB
+        x = x.float();
+        x *= 0.017352;
+        x -= 1.986725;
+        #x /= 255;
+        #x -= 0.449 #[0.485, 0.456, 0.406]
+        #x /= 0.226 #[0.229, 0.224, 0.225]
+        x = x.permute(0,3,1,2)
+        #########################################
+
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -455,9 +467,36 @@ class PoseHighResolutionNet(nn.Module):
                 x_list.append(y_list[i])
         y_list = self.stage4(x_list)
 
-        x = self.final_layer(y_list[0])
+        #x = self.final_layer(y_list[0])
+        #return x
 
-        return x
+        #########################################
+        heatmaps= self.final_layer(y_list[0])
+        batch_size, n_heatmaps, h, w = heatmaps.shape
+
+        #for i in range(16):
+        #    sample = heatmaps[0][i].to('cpu').detach().numpy().copy()
+        #    cv2.imshow('output', sample)
+        #    cv2.waitKey(0)
+
+        heatmaps = heatmaps.reshape((batch_size, n_heatmaps, -1))
+        confidence = torch.max(heatmaps, dim=2, keepdim=True)[0]
+        heatmaps = (heatmaps - 0.001) / (confidence - 0.001) * 20
+        heatmaps = nn.functional.softmax(heatmaps, dim=2)
+        heatmaps = heatmaps.reshape((batch_size, n_heatmaps, h, w))
+
+        mass_x = heatmaps.sum(dim=2)
+        mass_y = heatmaps.sum(dim=3)
+        mass_times_coord_x = mass_x * torch.arange(w).type(torch.float).to(mass_x.device)
+        mass_times_coord_y = mass_y * torch.arange(h).type(torch.float).to(mass_y.device)
+        x = mass_times_coord_x.sum(dim=2, keepdim=True)
+        y = mass_times_coord_y.sum(dim=2, keepdim=True)
+
+        coordinates = torch.cat((x, y), dim=2)
+        coordinates = coordinates.reshape((batch_size, n_heatmaps, 2))
+
+        return coordinates, confidence
+        ################################################################
 
     def init_weights(self, pretrained=''):
         logger.info('=> init weights from normal distribution')
