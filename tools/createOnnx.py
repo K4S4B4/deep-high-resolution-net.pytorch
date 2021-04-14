@@ -100,7 +100,7 @@ def main():
 #    model = torch.nn.DataParallel(model, device_ids=cfg.GPUS).cuda()
 
     ##############################################################################
-    batch_size = 1
+    batch_size = 2
     height = 256
     width = 256
     ##############################################################################
@@ -131,7 +131,7 @@ def main():
     x = torch.randn((batch_size, height, width, 3), requires_grad=True).byte()
     ##############################################################################
 
-    onnx_file_name = "hrnet_{}x{}x{}xBGRxByte_pose2dWithConf.onnx".format(batch_size, height, width)
+    onnx_file_name = "hrnet_{}x{}x{}xBGRxByte.onnx".format(batch_size, height, width)
     input_names = ["input"]
     output_names = ['joint2d', 'confidence']
     torch.onnx.export(model,
@@ -142,8 +142,29 @@ def main():
                     do_constant_folding=True,
                     input_names=input_names, 
                     output_names=output_names,
-                    dynamic_axes=None)
+                    #dynamic_axes={'input' : {0 : 'batch_size'},
+                    #    'joint2d' : {0 : 'batch_size'},
+                    #    'confidence' : {0 : 'batch_size'}}
+                    dynamic_axes=None
+                    )
     print('Onnx model exporting done')
+
+    onnx_file_name = "hrnet_Bx{}x{}xBGRxByte.onnx".format(height, width)
+    input_names = ["input"]
+    output_names = ['joint2d', 'confidence']
+    torch.onnx.export(model,
+                    x,
+                    onnx_file_name,
+                    export_params=True,
+                    opset_version=11,
+                    do_constant_folding=True,
+                    input_names=input_names, 
+                    output_names=output_names,
+                    dynamic_axes={'input' : {0 : 'batch_size'},
+                        'joint2d' : {0 : 'batch_size'},
+                        'confidence' : {0 : 'batch_size'}}
+                    )
+    print('dynamic model exporting done')
 
     ###########################################################
     #outputs = model(tensorImage)

@@ -493,7 +493,7 @@ class PoseHighResolutionNet(nn.Module):
         y = mass_times_coord_y.sum(dim=2, keepdim=True)
 
         coordinates = torch.cat((x, y), dim=2)
-        coordinates = coordinates.reshape((batch_size, n_heatmaps, 2))
+        coordinates = coordinates.reshape((batch_size, n_heatmaps, 2)) / 64 * 256
 
         return coordinates, confidence
         ################################################################
